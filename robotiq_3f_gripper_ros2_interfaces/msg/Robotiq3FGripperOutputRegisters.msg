@@ -26,7 +26,7 @@ uint8 r_gto
 uint8 r_atr
 
 
-# rPRA: Target position of the fingers (or finger A only if bit rICF is set).
+# rPRA: Target position of the fingers.
 # 0x00 Minimum position (open).
 # 0xFF Maximum position (close).
 
