@@ -1,8 +1,6 @@
 # Basic ROS2
 import rclpy
 from rclpy.node import Node
-from rclpy.action import ActionServer
-from rclpy.qos import ReliabilityPolicy, QoSProfile
 
 
 # Executor and callback imports
@@ -10,19 +8,20 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 
 # ROS2 interfaces
-from robotiq_3f_gripper_ros2_interfaces.msg import Robotiq3FGripperInputRegisters, Robotiq3FGripperOutputRegisters
-from robotiq_3f_gripper_ros2_interfaces.action import Robotiq3FGripperPositionGoal
+from robotiq_3f_gripper_ros2_interfaces.msg import Robotiq3FGripperInputRegisters
+from robotiq_3f_gripper_ros2_interfaces.srv import Robotiq3FGripperOutputService
 
 
 # Others
-import numpy as np
 import time, threading, math
 from pymodbus.client import ModbusTcpClient
 
 
-
-
-# ros2 action send_goal -f /gripper_position robotiq_3f_gripper_ros2_interfaces/action/Robotiq3FGripperPositionGoal "{output_registers_goal: {r_act: 1, r_mod: 1, r_gto: 1, r_atr: 0, r_pra: 0, r_spa: 255, r_fra: 0}}"
+#######
+#                                                                                                                                                      activate | mode   | go-to-pos|emergency| position | speed    |  force
+# ros2 service call /Robotiq3FGripper/OutputRegistersService robotiq_3f_gripper_ros2_interfaces/srv/Robotiq3FGripperOutputService "{output_registers: {r_act: 1, r_mod: 1, r_gto: 1, r_atr: 0, r_pra: 255, r_spa: 255, r_fra: 0}}"
+#
+#######
 
 class GripperControlListener(Node):
     '''
@@ -33,8 +32,7 @@ class GripperControlListener(Node):
     def __init__(self):
         super().__init__("gripper_control_listener_node")
         rclpy.logging.set_logger_level('gripper_control_listener_node', rclpy.logging.LoggingSeverity.INFO)
-        self.get_logger().info("Gripper action starting...")
-
+        self.get_logger().info("Gripper service starting...")
         
         # Declare parameters for node
         self.declare_parameter("gripper_address", "172.31.1.69")
@@ -46,36 +44,25 @@ class GripperControlListener(Node):
         self.lock = threading.Lock() # Used for secure comm to gripper?
 
         # Callback groups
-        self.group_1 = MutuallyExclusiveCallbackGroup() # read output register subscriber
+        self.group_1 = MutuallyExclusiveCallbackGroup() # gripper service
         self.group_2 = MutuallyExclusiveCallbackGroup() # gripper read input registers timer
-        self.group_3 = MutuallyExclusiveCallbackGroup() # action group
         
         # msgs init
         self.input_registers = Robotiq3FGripperInputRegisters()
         
-        # Actions
-        self._gripper_action_server = ActionServer(self, Robotiq3FGripperPositionGoal, "gripper_position", self.action_server_callback, callback_group=self.group_3)
+        # Service
+        self._output_register_service = self.create_service(Robotiq3FGripperOutputService, "Robotiq3FGripper/OutputRegistersService", self.service_callback, callback_group=self.group_1)
+
+        # Timer
+        self._read_input_timer = self.create_timer(0.1, self.read_input_registers, callback_group=self.group_2)
         
-        self.get_logger().info("Gripper action start up successful!")
+        self.get_logger().info("Gripper service start up successful!")
 
 
 
     def gripper_connection_init(self, address):
         self.client = ModbusTcpClient(address)
         self.client.connect()
-            
-    
-    def send_register_msg(self):
-        while True:
-            self.send_data(self.output_register_command) # Send current registers_msg to gripper
-            time.sleep(0.5) # Let the gripper process the msg for the given amount of time
-
-            gSTA = self.input_registers.g_sta
-            gIMC = self.input_registers.g_imc
-
-            if gSTA != 0 and gIMC == 3: # Check the gripper activation, mode, and position has reached stop point
-                self.get_logger().info("Register message successfully completed")
-                break
     
     
     def send_data(self, data):   
@@ -121,12 +108,12 @@ class GripperControlListener(Node):
         output_registers_list = [byte_0_int, 0, 0, rPRA, rSPA, rFRA]
         
         return output_registers_list
-        
+    
     
     def read_input_registers(self, numBytes=4):
         
         '''
-        Class function for reading input registers from the gripper and returning the Robotiq3FGripperInputRegisters message type
+        Class function for reading input registers from gripper and publishing this to the input register topic using the Robotiq3FGripperInputRegisters message type
         '''
         
         numRegs = int(math.ceil(numBytes/2))
@@ -141,65 +128,42 @@ class GripperControlListener(Node):
             response_byte_array.append(response.getRegister(i) & 0x00FF)
             
         
-        # Create input register msg
-        input_registers_msg = Robotiq3FGripperInputRegisters()
-        
         # Setting Gripper status register
         response_byte0_bit_string = format(response_byte_array[0], '08b') # Format int to 8 bits
         
-        input_registers_msg.g_act = int(response_byte0_bit_string[7],   base=2) # gACT ->       Initialization status       -> 1 = Gripper activation
-        input_registers_msg.g_mod = int(response_byte0_bit_string[5:7], base=2) # gMOD ->       Operation mode status       -> 11 = Done and ready
-        input_registers_msg.g_gto = int(response_byte0_bit_string[4],   base=2) # gGTO -> Activation and mode change status -> 11 = Done and ready
-        input_registers_msg.g_imc = int(response_byte0_bit_string[2:4], base=2) # gIMC -> Activation and mode change status -> 11 = Done and ready
-        input_registers_msg.g_sta = int(response_byte0_bit_string[0:2], base=2) # gSTA ->           Motion status           -> 11 = Completed successfully
+        self.input_registers.g_act = int(response_byte0_bit_string[7], base=2)   # gACT ->       Initialization status       -> 1 = Gripper activation
+        self.input_registers.g_mod = int(response_byte0_bit_string[5:7], base=2) # gMOD ->       Operation mode status       -> 11 = Done and ready
+        self.input_registers.g_gto = int(response_byte0_bit_string[4], base=2)   # gGTO -> Activation and mode change status -> 11 = Done and ready
+        self.input_registers.g_imc = int(response_byte0_bit_string[2:4], base=2) # gIMC -> Activation and mode change status -> 11 = Done and ready
+        self.input_registers.g_sta = int(response_byte0_bit_string[0:2], base=2) # gSTA ->           Motion status           -> 11 = Completed successfully
         
         # Setting Fault status register
-        input_registers_msg.g_flt = response_byte_array[2]
+        self.input_registers.g_flt = response_byte_array[2]
         
         # Setting Position request echo register
-        input_registers_msg.g_pra = response_byte_array[3]
-        
-        return input_registers_msg
+        self.input_registers.g_pra = response_byte_array[3]
     
     
-    def action_server_callback(self, goal_handle):
+    def service_callback(self, request, response):
         
-        request_msg = goal_handle.request.output_registers_goal
-        feedback_msg = Robotiq3FGripperPositionGoal.Feedback()
-        result_msg = Robotiq3FGripperPositionGoal.Result()
-
-
-        request_msg_list = self.output_registers_msg_to_list(request_msg) # Convert request msg to list
-        self.get_logger().info(f"Sending following output register list: {request_msg_list}")
-        self.send_data(request_msg_list) # Send request msg list to gripper
-
+        output_registers_list = self.output_registers_msg_to_list(request.output_registers) # Convert msg to list
+        self.send_data(output_registers_list) # Send list to gripper
+        
+        
         while True:
-            
             time.sleep(0.2) # Let the gripper process the msg for the given amount of time
 
-            
-            gripper_input_registers = self.read_input_registers()
 
-            gSTA = gripper_input_registers.g_sta
-            gIMC = gripper_input_registers.g_imc
+            gSTA = self.input_registers.g_sta
+            gIMC = self.input_registers.g_imc
             self.get_logger().info(f"gSTA = {gSTA}    gIMC = {gIMC}")
-            
-            
-            feedback_msg.input_registers = gripper_input_registers
-            feedback_msg.output_registers = request_msg
-            goal_handle.publish_feedback(feedback_msg)
 
             if gSTA != 0 and gIMC == 3: # Check the gripper activation, mode, and position has reached stop point
                 self.get_logger().info("Register message successfully completed")
+                response.success = True
                 break
         
-        
-        result_msg.result = 'Success'
-        self.get_logger().info(f"Result: {result_msg.result}")
-        
-        goal_handle.succeed()
-        
-        return result_msg
+        return response
     
     
     def shutdown_callback(self):

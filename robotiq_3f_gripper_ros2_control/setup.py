@@ -24,6 +24,7 @@ setup(
     entry_points={
         'console_scripts': [
             'gripper_control_listener_node = robotiq_3f_gripper_ros2_control.control_listener_node:main',
+            'gripper_control_service_server = robotiq_3f_gripper_ros2_control.control_service_server:main',
             'gripper_control_action_server = robotiq_3f_gripper_ros2_control.control_action_server:main',
         ],
     },

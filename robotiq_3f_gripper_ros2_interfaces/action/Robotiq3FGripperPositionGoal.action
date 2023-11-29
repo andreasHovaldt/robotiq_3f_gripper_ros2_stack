@@ -1,5 +1,6 @@
-uint8 position_goal
+Robotiq3FGripperOutputRegisters output_registers_goal
 ---
 string result
 ---
-string feedback
+Robotiq3FGripperInputRegisters input_registers
+Robotiq3FGripperOutputRegisters output_registers

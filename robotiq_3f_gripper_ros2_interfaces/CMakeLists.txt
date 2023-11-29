@@ -35,6 +35,7 @@ endif()
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Robotiq3FGripperInputRegisters.msg"
   "msg/Robotiq3FGripperOutputRegisters.msg"
+  "srv/Robotiq3FGripperOutputService.srv"
   "action/Robotiq3FGripperPositionGoal.action"
 )
 
