@@ -2,8 +2,6 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionServer
-from rclpy.qos import ReliabilityPolicy, QoSProfile
-
 
 # Executor and callback imports
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
@@ -11,18 +9,17 @@ from rclpy.executors import MultiThreadedExecutor
 
 # ROS2 interfaces
 from robotiq_3f_gripper_ros2_interfaces.msg import Robotiq3FGripperInputRegisters, Robotiq3FGripperOutputRegisters
-from robotiq_3f_gripper_ros2_interfaces.action import Robotiq3FGripperPositionGoal
+from robotiq_3f_gripper_ros2_interfaces.action import Robotiq3FGripperOutputGoal
 
 
 # Others
-import numpy as np
 import time, threading, math
 from pymodbus.client import ModbusTcpClient
 
 
 
 
-# ros2 action send_goal -f /gripper_position robotiq_3f_gripper_ros2_interfaces/action/Robotiq3FGripperPositionGoal "{output_registers_goal: {r_act: 1, r_mod: 1, r_gto: 1, r_atr: 0, r_pra: 0, r_spa: 255, r_fra: 0}}"
+# ros2 action send_goal -f /gripper_position robotiq_3f_gripper_ros2_interfaces/action/Robotiq3FGripperOutputGoal "{output_registers_goal: {r_act: 1, r_mod: 1, r_gto: 1, r_atr: 0, r_pra: 0, r_spa: 255, r_fra: 0}}"
 
 class GripperControlListener(Node):
     '''
@@ -54,7 +51,7 @@ class GripperControlListener(Node):
         self.input_registers = Robotiq3FGripperInputRegisters()
         
         # Actions
-        self._gripper_action_server = ActionServer(self, Robotiq3FGripperPositionGoal, "gripper_position", self.action_server_callback, callback_group=self.group_3)
+        self._gripper_action_server = ActionServer(self, Robotiq3FGripperOutputGoal, "gripper_position", self.action_server_callback, callback_group=self.group_3)
         
         self.get_logger().info("Gripper action start up successful!")
 
@@ -165,8 +162,8 @@ class GripperControlListener(Node):
     def action_server_callback(self, goal_handle):
         
         request_msg = goal_handle.request.output_registers_goal
-        feedback_msg = Robotiq3FGripperPositionGoal.Feedback()
-        result_msg = Robotiq3FGripperPositionGoal.Result()
+        feedback_msg = Robotiq3FGripperOutputGoal.Feedback()
+        result_msg = Robotiq3FGripperOutputGoal.Result()
 
 
         request_msg_list = self.output_registers_msg_to_list(request_msg) # Convert request msg to list
