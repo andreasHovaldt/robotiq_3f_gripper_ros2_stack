@@ -1,5 +1,5 @@
 # robotiq_3f_gripper_ros2_stack
-Used in Robotics 5th semester project [github](https://github.com/andreasHovaldt/LLM-Planner-for-Bimanual-object-manipulation). Package provides functionalities for controlling a Robotiq 3 Finger Adaptive Gripper using ROS2.
+Used in the 5th semester [Robotics LLM-Planner-for-Bimanual-object-mnipulation project](https://github.com/andreasHovaldt/LLM-Planner-for-Bimanual-object-manipulation). Package stack provides functionalities for controlling a Robotiq 3 Finger Adaptive Gripper using ROS2.
 
 ## Required libraries
 ### Python3
