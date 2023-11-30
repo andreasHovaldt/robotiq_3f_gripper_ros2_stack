@@ -30,13 +30,14 @@ class GripperControlListener(Node):
     * Publishes status of gripper to the Robotiq3FGripper/InputRegisters topic (Using "Robotiq3FGripperInputRegisters" msg)
     '''
     def __init__(self):
-        super().__init__("gripper_control_listener_node")
-        rclpy.logging.set_logger_level('gripper_control_listener_node', rclpy.logging.LoggingSeverity.INFO)
-        self.get_logger().info("Gripper service starting...")
+        super().__init__("gripper_control_service_server")
+        rclpy.logging.set_logger_level('gripper_control_service_server', rclpy.logging.LoggingSeverity.INFO)
         
         # Declare parameters for node
         self.declare_parameter("gripper_address", "172.31.1.69")
         address = self.get_parameter("gripper_address").get_parameter_value().string_value
+        
+        self.get_logger().info(f"Gripper service starting on {address}...")
         
         # Variable Init
         self.gripper_connection_init(address)
@@ -56,7 +57,7 @@ class GripperControlListener(Node):
         # Timer
         self._read_input_timer = self.create_timer(0.1, self.read_input_registers, callback_group=self.group_2)
         
-        self.get_logger().info("Gripper service start up successful!")
+        self.get_logger().info("Gripper service start-up successful!")
 
 
 
