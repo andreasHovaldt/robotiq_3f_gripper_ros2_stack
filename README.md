@@ -55,6 +55,7 @@ ros2 service call /Robotiq3FGripper/OutputRegistersService robotiq_3f_gripper_ro
 ros2 run robotiq_3f_gripper_ros2_control gripper_control_action_server
 ```
 This starts an action server for the gripper. Check the custom interface ```Robotiq3FGripperOutputGoal.action``` for more information on how to interact with the action server.
+Currently, the action server has a bug, where, if you leave it without sending a goal for a while, the gripper has to run through its activation initialization again.
 
 #### Helper command for interacting with the action server
 ```shell
