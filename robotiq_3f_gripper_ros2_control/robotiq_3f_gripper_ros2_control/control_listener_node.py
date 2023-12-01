@@ -99,7 +99,6 @@ class GripperControlListener(Node):
             message.append((data[2*i] << 8) + data[2*i+1])
         
         # print(f"write_registers({message})") # Debug  
-        #To do!: Implement try/except
         with self.lock:
             self.client.write_registers(0, message)
     
