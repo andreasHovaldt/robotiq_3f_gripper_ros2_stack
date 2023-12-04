@@ -29,7 +29,11 @@ class GripperServiceServer(Node):
     * Publishes status of gripper to the Robotiq3FGripper/InputRegisters topic (Using "Robotiq3FGripperInputRegisters" msg)
     * Default IP is 172.31.1.69 and the port is 502
     '''
-    def __init__(self):
+    def __init__(self, gripper_startup_settings:list = [1,1,1,0,255,255,0]):
+        '''
+        Parameters:
+        * gripper_startup_settings: [rACT, rMOD, rGTO, rATR, rPRA, rSPA, rFRA]
+        '''
         super().__init__("gripper_control_service_server")
         rclpy.logging.set_logger_level('gripper_control_service_server', rclpy.logging.LoggingSeverity.INFO)
         
@@ -41,7 +45,6 @@ class GripperServiceServer(Node):
         
         # Variable Init
         self.gripper_connection_init(address)
-        self.output_register_command = [11,0,0,0,128,0]  #[action_request,0,0,start_pos,start_speed,start_force]
         self.lock = threading.Lock() # Used for secure comm to gripper?
 
         # Callback groups
@@ -53,12 +56,15 @@ class GripperServiceServer(Node):
         
         # Publisher
         self._input_register_pub = self.create_publisher(Robotiq3FGripperInputRegisters, "Robotiq3FGripper/InputRegisters", 10)
-        
-        # Service
-        self._output_register_service = self.create_service(Robotiq3FGripperOutputService, "Robotiq3FGripper/OutputRegistersService", self.service_callback, callback_group=self.group_1)
 
         # Timer
         self._read_input_timer = self.create_timer(0.1, self.read_input_registers, callback_group=self.group_2)
+        
+        # Gripper init
+        #self.gripper_activation(gripper_startup_settings) # TODO: DOESN'T WORK YET
+        
+        # Service
+        self._output_register_service = self.create_service(Robotiq3FGripperOutputService, "Robotiq3FGripper/OutputRegistersService", self.service_callback, callback_group=self.group_1)
         
         self.get_logger().info("Gripper service start-up successful!")
 
@@ -67,6 +73,33 @@ class GripperServiceServer(Node):
     def gripper_connection_init(self, address):
         self.client = ModbusTcpClient(address) # Create client object
         self.client.connect() # Connect client to gripper
+        
+        
+    def gripper_activation(self, cmd_list: list): # TODO: Add this functionality so the gripper doesn't have to do the activation the first time you use the gripper
+        '''
+        Activate the gripper by setting starting output values
+        
+        Parameters:
+        cmd_list: [rACT, rMOD, rGTO, rATR, rPRA, rSPA, rFRA]
+        '''
+        self.get_logger().info("Gripper activating...")
+
+        self.send_data(cmd_list) # Send list to gripper
+        
+        while True:
+            time.sleep(0.2) # Let the gripper process the msg for the given amount of time
+
+            # Assign status to variables
+            gSTA = self.input_registers.g_sta
+            gIMC = self.input_registers.g_imc
+            self.get_logger().info(f"gSTA = {gSTA}    gIMC = {gIMC}")
+
+            # Check the gripper activation, mode, and position has reached stop point
+            if gSTA != 0 and gIMC == 3:
+                self.get_logger().info("Gripper successfully activated!")
+                break
+        
+        
     
     
     def send_data(self, data):   
