@@ -37,6 +37,8 @@ class GripperControlListener(Node):
         self.declare_parameter("gripper_address", "172.31.1.69")
         address = self.get_parameter("gripper_address").get_parameter_value().string_value
         
+        self.get_logger().info(f"Gripper topic listener starting on {address}...")
+        
         # Variable Init
         self.gripper_connection_init(address)
         self.output_register_command = [11,0,0,0,128,0]  #[action_request,0,0,start_pos,start_speed,start_force]
@@ -59,6 +61,8 @@ class GripperControlListener(Node):
         # Timers
         self._read_input_timer = self.create_timer(0.1, self.read_input_registers, callback_group=self.group_2)
 
+        self.get_logger().info(f"Gripper topic listener start-up successful!")
+        
 
 
     def gripper_connection_init(self, address):
@@ -95,7 +99,6 @@ class GripperControlListener(Node):
             message.append((data[2*i] << 8) + data[2*i+1])
         
         # print(f"write_registers({message})") # Debug  
-        #To do!: Implement try/except
         with self.lock:
             self.client.write_registers(0, message)
     

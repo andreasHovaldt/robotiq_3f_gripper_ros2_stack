@@ -21,21 +21,21 @@ from pymodbus.client import ModbusTcpClient
 
 # ros2 action send_goal -f /gripper_position robotiq_3f_gripper_ros2_interfaces/action/Robotiq3FGripperOutputGoal "{output_registers_goal: {r_act: 1, r_mod: 1, r_gto: 1, r_atr: 0, r_pra: 0, r_spa: 255, r_fra: 0}}"
 
-class GripperControlListener(Node):
+class GripperActionServer(Node):
     '''
     Notes:
-    * Subscribes to the topic Robotiq3FGripper/OutputRegisters, and sends the values as a command to the Robotiq 3F Gripper (Using "Robotiq3FGripperOutputRegisters" msg)
-    * Publishes status of gripper to the Robotiq3FGripper/InputRegisters topic (Using "Robotiq3FGripperInputRegisters" msg)
+    * Starts an action server for controlling the gripper.
+    * The service uses the Robotiq3FGripperOutputGoal.action custom interface (which uses "Robotiq3FGripperOutputRegisters" msg for interacting with it)
     '''
     def __init__(self):
-        super().__init__("gripper_control_listener_node")
-        rclpy.logging.set_logger_level('gripper_control_listener_node', rclpy.logging.LoggingSeverity.INFO)
-        self.get_logger().info("Gripper action starting...")
-
+        super().__init__("gripper_control_action_server")
+        rclpy.logging.set_logger_level('gripper_control_action_server', rclpy.logging.LoggingSeverity.INFO)
         
         # Declare parameters for node
         self.declare_parameter("gripper_address", "172.31.1.69")
         address = self.get_parameter("gripper_address").get_parameter_value().string_value
+        
+        self.get_logger().info(f"Gripper service starting on {address}...")
         
         # Variable Init
         self.gripper_connection_init(address)
@@ -53,7 +53,7 @@ class GripperControlListener(Node):
         # Actions
         self._gripper_action_server = ActionServer(self, Robotiq3FGripperOutputGoal, "gripper_position", self.action_server_callback, callback_group=self.group_3)
         
-        self.get_logger().info("Gripper action start up successful!")
+        self.get_logger().info("Gripper action start-up successful!")
 
 
 
@@ -91,7 +91,6 @@ class GripperControlListener(Node):
             message.append((data[2*i] << 8) + data[2*i+1])
         
         # print(f"write_registers({message})") # Debug  
-        #To do!: Implement try/except
         with self.lock:
             self.client.write_registers(0, message)
     
@@ -161,11 +160,12 @@ class GripperControlListener(Node):
     
     def action_server_callback(self, goal_handle):
         
+        # Initiate variables used for the action server
         request_msg = goal_handle.request.output_registers_goal
         feedback_msg = Robotiq3FGripperOutputGoal.Feedback()
         result_msg = Robotiq3FGripperOutputGoal.Result()
 
-
+        # Convert request msg to list and then send command to gripper
         request_msg_list = self.output_registers_msg_to_list(request_msg) # Convert request msg to list
         self.get_logger().info(f"Sending following output register list: {request_msg_list}")
         self.send_data(request_msg_list) # Send request msg list to gripper
@@ -175,22 +175,26 @@ class GripperControlListener(Node):
             time.sleep(0.2) # Let the gripper process the msg for the given amount of time
 
             
-            gripper_input_registers = self.read_input_registers()
+            gripper_input_registers = self.read_input_registers() # Read the status of the gripper
 
+            # Assign the used status variables 
             gSTA = gripper_input_registers.g_sta
             gIMC = gripper_input_registers.g_imc
             self.get_logger().info(f"gSTA = {gSTA}    gIMC = {gIMC}")
             
             
+            # Assign the action msgs
             feedback_msg.input_registers = gripper_input_registers
             feedback_msg.output_registers = request_msg
             goal_handle.publish_feedback(feedback_msg)
 
-            if gSTA != 0 and gIMC == 3: # Check the gripper activation, mode, and position has reached stop point
+            # Check the gripper activation, mode, and position has reached stop point
+            if gSTA != 0 and gIMC == 3:
                 self.get_logger().info("Register message successfully completed")
                 break
         
         
+        # Set action as successfully completed
         result_msg.result = 'Success'
         self.get_logger().info(f"Result: {result_msg.result}")
         
@@ -209,11 +213,11 @@ def main(args=None):
     rclpy.init(args=args)
 
     # Instansiate node class
-    ControlListenerNode = GripperControlListener()
+    control_action_server_node = GripperActionServer()
 
     # Create executor
     executor = MultiThreadedExecutor()
-    executor.add_node(ControlListenerNode)
+    executor.add_node(control_action_server_node)
 
     
     try:
@@ -225,7 +229,7 @@ def main(args=None):
     
     finally:
         # Shutdown executor
-        ControlListenerNode.shutdown_callback()
+        control_action_server_node.shutdown_callback()
         executor.shutdown()
 
 
